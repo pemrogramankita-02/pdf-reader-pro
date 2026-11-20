@@ -1,7 +1,7 @@
 /* PDF READER PRO — Service Worker v2.0.2
    Pembaruan cache aplikasi tanpa menghapus database PDF pengguna.
 */
-const APP_VERSION = "2.0.2";
+const APP_VERSION = "2.0.3";
 const CACHE = "pdf-reader-pro-shell-" + APP_VERSION;
 const SHELL = [
   "./",
