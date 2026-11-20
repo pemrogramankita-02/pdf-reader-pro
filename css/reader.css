@@ -1,3 +1,403 @@
-[hidden]{display:none!important}.reader-view{position:fixed;inset:0;background:var(--bg);z-index:10;display:flex;flex-direction:column}.reader-top{height:56px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);flex:none}.reader-title{flex:1;min-width:0}.reader-title strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.reader-title small{display:block;color:var(--muted);font-size:10px;margin-top:3px}.reader-toolbar{min-height:48px;display:flex;align-items:center;justify-content:center;gap:5px;padding:4px 7px;border-bottom:1px solid var(--line);background:var(--panel);flex:none}.tool-btn{border:0;background:transparent;border-radius:8px;min-width:32px;height:34px;font-size:20px}.page-control{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}.page-control input{width:39px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;text-align:center;padding:5px;font-size:12px}.zoom-label{font-size:10px;min-width:34px;text-align:center;color:var(--muted)}.toolbar-divider{height:20px;border-left:1px solid var(--line);margin:0 3px}.pdf-container{flex:1;overflow:auto;overscroll-behavior:contain;background:#343840;padding:12px 8px 22px;touch-action:pan-x pan-y}.pdf-pages{display:flex;flex-direction:column;align-items:center;gap:12px;min-height:100%}.pdf-page{position:relative;background:#fff;box-shadow:0 3px 15px #0005;max-width:100%;overflow:hidden}.pdf-page canvas{display:block;max-width:100%;height:auto}.reader-bottom{height:57px;display:flex;align-items:center;justify-content:space-around;border-top:1px solid var(--line);background:var(--panel);flex:none;padding-bottom:env(safe-area-inset-bottom)}.bottom-action{border:0;background:transparent;color:var(--muted);font-size:18px;display:flex;align-items:center;gap:5px;padding:9px 8px}.bottom-action span{font-size:10px}.menu-popover{position:absolute;right:12px;top:52px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 30px #0006;border-radius:12px;padding:6px;min-width:190px;z-index:20}.menu-popover button{display:block;width:100%;text-align:left;background:transparent;border:0;padding:12px 10px;font-size:12px;border-radius:7px}.menu-popover button:active{background:var(--panel2)}.reader-view.toolbar-hidden .reader-toolbar,.reader-view.toolbar-hidden .reader-bottom{display:none}.reader-view:fullscreen{background:var(--bg)}@media(min-width:700px){.pdf-container{padding:20px}.reader-toolbar{gap:12px}}
+/* =========================================================
+   PDF READER PRO v2 — css/reader.css
+   Perbaikan tata letak halaman PDF dan Text Layer PDF.js 3.11
+   Ganti SELURUH isi css/reader.css dengan isi file ini.
+   ========================================================= */
 
-.reader-panel{position:absolute;z-index:25;left:8px;right:8px;top:64px;bottom:68px;max-width:560px;margin:auto;background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:0 12px 35px #0008;overflow:auto;padding:12px}.panel-head{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px}.panel-row{width:100%;display:flex;justify-content:space-between;padding:11px 8px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);font-size:12px}.panel-row small{color:var(--muted);font-size:10px}.panel-input{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text)}.thumb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.thumb-item{min-height:100px;background:white;color:#111}.thumb-item canvas{max-width:100%}.signature-canvas{width:100%;max-width:320px;background:white;touch-action:none}.reader-settings{border-top:1px solid var(--line);padding-top:5px}.reader-settings button{display:block;width:100%;padding:9px;background:transparent;border:0;text-align:left;color:var(--text)}.reader-settings input{width:100%}
+/* Elemen tersembunyi */
+[hidden] {
+  display: none !important;
+}
+
+/* =========================================================
+   TAMPILAN PEMBACA PDF
+   ========================================================= */
+.reader-view {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+
+.reader-top {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.reader-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.reader-title strong {
+  display: block;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reader-title small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.reader-toolbar {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex: none;
+}
+
+.tool-btn {
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  min-width: 32px;
+  height: 34px;
+  font-size: 20px;
+}
+
+.page-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.page-control input {
+  width: 39px;
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-align: center;
+  padding: 5px;
+  font-size: 12px;
+}
+
+.zoom-label {
+  font-size: 10px;
+  min-width: 34px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.toolbar-divider {
+  height: 20px;
+  border-left: 1px solid var(--line);
+  margin: 0 3px;
+}
+
+/* Area gulir dokumen */
+.pdf-container {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #343840;
+  padding: 12px 8px 22px;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-height: 100%;
+}
+
+/* Satu halaman PDF */
+.pdf-page {
+  position: relative;
+  flex: none;
+  background: #fff;
+  box-shadow: 0 3px 15px #0005;
+  max-width: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Kanvas hasil render PDF.js */
+.pdf-page canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* =========================================================
+   PERBAIKAN UTAMA TEXT LAYER PDF.js
+   Teks dibuat transparan tetapi tetap dapat dipilih/disalin.
+   Posisi setiap span mengikuti koordinat yang diberikan PDF.js.
+   ========================================================= */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+  text-align: initial;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 2;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  transform-origin: 0% 0%;
+  cursor: text;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.textLayer span.markedContent {
+  top: 0;
+  height: 0;
+}
+
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: -1;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.textLayer ::selection {
+  background: rgba(35, 110, 210, 0.28);
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+/* Jangan menampilkan salinan teks sebagai tulisan kedua.
+   PDF asli tetap terlihat dari canvas di bawahnya. */
+.textLayer span,
+.textLayer br {
+  color: transparent !important;
+}
+
+/* =========================================================
+   PANEL BAWAH DAN MENU
+   ========================================================= */
+.reader-bottom {
+  height: 57px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  flex: none;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-action {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 8px;
+}
+
+.bottom-action span {
+  font-size: 10px;
+}
+
+.menu-popover {
+  position: absolute;
+  right: 12px;
+  top: 52px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 30px #0006;
+  border-radius: 12px;
+  padding: 6px;
+  min-width: 190px;
+  z-index: 20;
+}
+
+.menu-popover button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 12px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+
+.menu-popover button:active {
+  background: var(--panel2);
+}
+
+.reader-view.toolbar-hidden .reader-toolbar,
+.reader-view.toolbar-hidden .reader-bottom {
+  display: none;
+}
+
+.reader-view:fullscreen {
+  background: var(--bg);
+}
+
+/* =========================================================
+   PANEL FITUR TAMBAHAN
+   ========================================================= */
+.reader-panel {
+  position: absolute;
+  z-index: 25;
+  left: 8px;
+  right: 8px;
+  top: 64px;
+  bottom: 68px;
+  max-width: 560px;
+  margin: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  box-shadow: 0 12px 35px #0008;
+  overflow: auto;
+  padding: 12px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.panel-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.panel-row small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.panel-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel2);
+  color: var(--text);
+}
+
+.thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.thumb-item {
+  min-height: 100px;
+  background: #fff;
+  color: #111;
+}
+
+.thumb-item canvas {
+  max-width: 100%;
+}
+
+.signature-canvas {
+  width: 100%;
+  max-width: 320px;
+  background: #fff;
+  touch-action: none;
+}
+
+.reader-settings {
+  border-top: 1px solid var(--line);
+  padding-top: 5px;
+}
+
+.reader-settings button {
+  display: block;
+  width: 100%;
+  padding: 9px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: var(--text);
+}
+
+.reader-settings input {
+  width: 100%;
+}
+
+/* =========================================================
+   RESPONSIF
+   ========================================================= */
+@media (min-width: 700px) {
+  .pdf-container {
+    padding: 20px;
+  }
+
+  .reader-toolbar {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 380px) {
+  .reader-toolbar {
+    gap: 2px;
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+
+  .tool-btn {
+    min-width: 28px;
+  }
+
+  .bottom-action {
+    gap: 3px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+}
