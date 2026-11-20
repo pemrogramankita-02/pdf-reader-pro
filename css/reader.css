@@ -136,3 +136,28 @@
   .tool-btn { min-width: 28px; }
   .bottom-action { gap: 3px; padding-left: 4px; padding-right: 4px; }
 }
+
+
+/* === PATCH ZOOM DUA JARI PDF READER PRO ===
+   Tempelkan di BARIS PALING AKHIR css/reader.css.
+*/
+.pdf-container {
+  overflow: auto !important;
+  touch-action: none !important;
+  -webkit-overflow-scrolling: auto;
+}
+.pdf-pages {
+  width: max-content !important;
+  min-width: 100% !important;
+  align-items: center !important;
+}
+.pdf-page {
+  max-width: none !important;
+  overflow: visible !important;
+  flex: none !important;
+}
+.pdf-page canvas {
+  max-width: none !important;
+  width: auto;
+  height: auto;
+}
