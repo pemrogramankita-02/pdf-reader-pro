@@ -38,7 +38,7 @@
 .pdf-container {
   flex: 1; min-height: 0; min-width: 0; overflow: auto;
   overscroll-behavior: contain; background: #343840;
-  padding: 12px 8px 22px; touch-action: pan-x pan-y;
+  padding: 12px 8px 22px; touch-action: none;
   -webkit-overflow-scrolling: touch;
 }
 .pdf-pages {
@@ -161,3 +161,25 @@
   width: auto;
   height: auto;
 }
+
+
+/* Tombol pemulihan toolbar saat mode sembunyi. */
+.restore-toolbar-btn {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: rgba(20, 23, 30, .92);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 18px rgba(0,0,0,.35);
+}
+.restore-toolbar-btn[hidden] { display: none !important; }
+.reader-view.toolbar-hidden .reader-top,
+.reader-view.toolbar-hidden .reader-toolbar,
+.reader-view.toolbar-hidden .reader-bottom { display: none !important; }
