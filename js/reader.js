@@ -21,6 +21,7 @@
     try {
       setupPDFjs();
       R.doc = doc;
+      setToolbarHidden(false);
       R.page = doc.lastPage || 1;
       R.scale = 1;
       R.rotation = doc.rotation || 0;
@@ -191,7 +192,23 @@
     }
   };
 
-  $("hideToolbarBtn").onclick = () => $("readerView").classList.toggle("toolbar-hidden");
+  // Tombol pulih tetap tersedia saat toolbar disembunyikan.
+  const restoreToolbarBtn = document.createElement("button");
+  restoreToolbarBtn.id = "restoreToolbarBtn";
+  restoreToolbarBtn.type = "button";
+  restoreToolbarBtn.className = "restore-toolbar-btn";
+  restoreToolbarBtn.textContent = "Tampilkan toolbar";
+  restoreToolbarBtn.setAttribute("aria-label", "Kembalikan toolbar");
+  restoreToolbarBtn.hidden = true;
+  $("readerView").append(restoreToolbarBtn);
+
+  function setToolbarHidden(hidden) {
+    $("readerView").classList.toggle("toolbar-hidden", hidden);
+    restoreToolbarBtn.hidden = !hidden;
+    restoreToolbarBtn.setAttribute("aria-hidden", String(!hidden));
+  }
+  $("hideToolbarBtn").onclick = () => setToolbarHidden(true);
+  restoreToolbarBtn.onclick = () => setToolbarHidden(false);
   $("modeBtn").onclick = () => {
     R.mode = R.mode === "continuous" ? "single" : "continuous";
     $("modeBtn").innerHTML = R.mode === "continuous" ? "▤ <span>Scroll</span>" : "▣ <span>Halaman</span>";
@@ -263,55 +280,112 @@
     }
   });
 
-  /* Zoom dua jari: satu jari tetap dapat menggulir halaman secara normal. */
+  /*
+   * Gestur sentuh:
+   * - Dua jari: pinch-to-zoom.
+   * - Satu jari: geser dokumen secara manual.
+   * Skala final dirender ulang setelah gestur selesai.
+   */
   const pdfContainer = $("pdfContainer");
-  pdfContainer.addEventListener("touchstart", e => {
-    if (e.touches.length !== 2 || !R.pdf) return;
-    const a = e.touches[0], b = e.touches[1];
-    const distance = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
-    R.pinch = { distance, startScale: R.scale, changed: false };
-  }, { passive: true });
+  let pinch = null;
+  let pan = null;
+  let lastTap = 0;
 
-  pdfContainer.addEventListener("touchmove", e => {
-    if (!R.pinch || e.touches.length !== 2) return;
-    e.preventDefault();
-    const a = e.touches[0], b = e.touches[1];
-    const distance = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
-    const nextScale = Math.max(0.5, Math.min(5, R.pinch.startScale * (distance / R.pinch.distance)));
-    const pages = $("pdfPages");
-    const ratio = nextScale / R.scale;
-    pages.style.transformOrigin = "top center";
-    pages.style.transform = "scale(" + ratio + ")";
-    R.pinch.previewScale = nextScale;
-    R.pinch.changed = true;
+  const touchDistance = (a, b) =>
+    Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+
+  pdfContainer.addEventListener("touchstart", event => {
+    if (!R.pdf) return;
+
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      pan = null;
+      const a = event.touches[0], b = event.touches[1];
+      pinch = {
+        startDistance: Math.max(1, touchDistance(a, b)),
+        startScale: R.scale,
+        previewScale: R.scale
+      };
+      return;
+    }
+
+    if (event.touches.length === 1 && !pinch) {
+      const t = event.touches[0];
+      pan = {
+        x: t.clientX, y: t.clientY,
+        scrollLeft: pdfContainer.scrollLeft,
+        scrollTop: pdfContainer.scrollTop,
+        moved: false
+      };
+    }
   }, { passive: false });
 
-  function finishPinch() {
-    if (!R.pinch) return;
-    const pinch = R.pinch;
-    R.pinch = null;
-    if (!pinch.changed || !pinch.previewScale) return;
-    R.scale = pinch.previewScale;
-    clearTimeout(pinchRenderTimer);
-    pinchRenderTimer = setTimeout(() => render(), 100);
+  pdfContainer.addEventListener("touchmove", event => {
+    if (event.touches.length === 2 && pinch) {
+      event.preventDefault();
+      const distance = Math.max(1, touchDistance(event.touches[0], event.touches[1]));
+      const ratio = distance / pinch.startDistance;
+      const nextScale = Math.max(0.5, Math.min(5, pinch.startScale * ratio));
+      pinch.previewScale = nextScale;
+      $("pdfPages").style.transformOrigin = "top center";
+      $("pdfPages").style.transform = "scale(" + (nextScale / pinch.startScale) + ")";
+      $("zoomLabel").textContent = Math.round(nextScale * 100) + "%";
+      return;
+    }
+
+    if (event.touches.length === 1 && pan && !pinch) {
+      event.preventDefault();
+      const t = event.touches[0];
+      const dx = t.clientX - pan.x;
+      const dy = t.clientY - pan.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) pan.moved = true;
+      pdfContainer.scrollLeft = pan.scrollLeft - dx;
+      pdfContainer.scrollTop = pan.scrollTop - dy;
+    }
+  }, { passive: false });
+
+  function completePinch() {
+    if (!pinch) return;
+    const finalScale = pinch.previewScale;
+    pinch = null;
+    pan = null;
+    if (Math.abs(finalScale - R.scale) < 0.01) {
+      $("pdfPages").style.transform = "";
+      $("zoomLabel").textContent = Math.round(R.scale * 100) + "%";
+      return;
+    }
+    R.scale = finalScale;
+    render();
   }
 
-  pdfContainer.addEventListener("touchend", e => {
-    if (R.pinch && e.touches.length < 2) finishPinch();
-  }, { passive: true });
-  pdfContainer.addEventListener("touchcancel", finishPinch, { passive: true });
-
-  let lastTap = 0;
-  pdfContainer.addEventListener("touchend", e => {
-    if (e.changedTouches.length !== 1) return;
-    const now = Date.now();
-    if (now - lastTap < 280) {
-      const next = R.scale < 1.5 ? 2 : 1;
-      setZoom(next);
-      lastTap = 0;
-    } else {
-      lastTap = now;
+  pdfContainer.addEventListener("touchend", event => {
+    if (pinch && event.touches.length < 2) {
+      completePinch();
+      return;
     }
+
+    if (pan && event.touches.length === 0) {
+      const wasMoved = pan.moved;
+      pan = null;
+      if (wasMoved) return;
+
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        setZoom(R.scale < 1.5 ? 2 : 1);
+        lastTap = 0;
+      } else {
+        lastTap = now;
+      }
+    }
+  }, { passive: false });
+
+  pdfContainer.addEventListener("touchcancel", () => {
+    if (pinch) {
+      pinch = null;
+      $("pdfPages").style.transform = "";
+      $("zoomLabel").textContent = Math.round(R.scale * 100) + "%";
+    }
+    pan = null;
   }, { passive: true });
 
   window.addEventListener("resize", () => {
@@ -323,59 +397,3 @@
 
   window.PDFReader = { open, getState: () => R, render, setZoom };
 })();
-
-
-/* === PATCH GESTUR SENTUH PDF READER PRO ===
-   Tempelkan setelah baris terakhir js/reader.js.
-   Satu jari menggeser halaman; dua jari menggunakan handler pinch
-   yang sudah ada di reader.js.
-*/
-(() => {
-  const area = document.getElementById("pdfContainer");
-  const pages = document.getElementById("pdfPages");
-  if (!area || !pages || !window.PDFReader) return;
-
-  let oneFingerPan = null;
-
-  area.addEventListener("touchstart", event => {
-    if (event.touches.length === 1) {
-      const t = event.touches[0];
-      oneFingerPan = {
-        x: t.clientX, y: t.clientY,
-        left: area.scrollLeft, top: area.scrollTop
-      };
-    } else {
-      oneFingerPan = null;
-    }
-  }, { passive: true });
-
-  area.addEventListener("touchmove", event => {
-    if (event.touches.length === 2) {
-      oneFingerPan = null;
-      return;
-    }
-    if (event.touches.length !== 1 || !oneFingerPan) return;
-
-    event.preventDefault();
-    const t = event.touches[0];
-    area.scrollLeft = oneFingerPan.left - (t.clientX - oneFingerPan.x);
-    area.scrollTop = oneFingerPan.top - (t.clientY - oneFingerPan.y);
-  }, { passive: false });
-
-  area.addEventListener("touchend", event => {
-    if (!event.touches || event.touches.length !== 1) {
-      oneFingerPan = null;
-      return;
-    }
-    const t = event.touches[0];
-    oneFingerPan = {
-      x: t.clientX, y: t.clientY,
-      left: area.scrollLeft, top: area.scrollTop
-    };
-  }, { passive: true });
-
-  area.addEventListener("touchcancel", () => {
-    oneFingerPan = null;
-  }, { passive: true });
-})();
-
