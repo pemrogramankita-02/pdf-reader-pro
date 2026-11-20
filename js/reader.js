@@ -323,3 +323,59 @@
 
   window.PDFReader = { open, getState: () => R, render, setZoom };
 })();
+
+
+/* === PATCH GESTUR SENTUH PDF READER PRO ===
+   Tempelkan setelah baris terakhir js/reader.js.
+   Satu jari menggeser halaman; dua jari menggunakan handler pinch
+   yang sudah ada di reader.js.
+*/
+(() => {
+  const area = document.getElementById("pdfContainer");
+  const pages = document.getElementById("pdfPages");
+  if (!area || !pages || !window.PDFReader) return;
+
+  let oneFingerPan = null;
+
+  area.addEventListener("touchstart", event => {
+    if (event.touches.length === 1) {
+      const t = event.touches[0];
+      oneFingerPan = {
+        x: t.clientX, y: t.clientY,
+        left: area.scrollLeft, top: area.scrollTop
+      };
+    } else {
+      oneFingerPan = null;
+    }
+  }, { passive: true });
+
+  area.addEventListener("touchmove", event => {
+    if (event.touches.length === 2) {
+      oneFingerPan = null;
+      return;
+    }
+    if (event.touches.length !== 1 || !oneFingerPan) return;
+
+    event.preventDefault();
+    const t = event.touches[0];
+    area.scrollLeft = oneFingerPan.left - (t.clientX - oneFingerPan.x);
+    area.scrollTop = oneFingerPan.top - (t.clientY - oneFingerPan.y);
+  }, { passive: false });
+
+  area.addEventListener("touchend", event => {
+    if (!event.touches || event.touches.length !== 1) {
+      oneFingerPan = null;
+      return;
+    }
+    const t = event.touches[0];
+    oneFingerPan = {
+      x: t.clientX, y: t.clientY,
+      left: area.scrollLeft, top: area.scrollTop
+    };
+  }, { passive: true });
+
+  area.addEventListener("touchcancel", () => {
+    oneFingerPan = null;
+  }, { passive: true });
+})();
+
