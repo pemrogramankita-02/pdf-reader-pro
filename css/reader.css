@@ -183,3 +183,23 @@
 .reader-view.toolbar-hidden .reader-top,
 .reader-view.toolbar-hidden .reader-toolbar,
 .reader-view.toolbar-hidden .reader-bottom { display: none !important; }
+
+
+/* Lazy-render placeholders: ukuran dipertahankan sebelum Canvas dibuat. */
+.pdf-page-placeholder {
+  min-height: 160px;
+  background: #fff;
+  contain: layout paint style;
+}
+.pdf-page[data-rendering="true"] {
+  background: #fff;
+}
+.pdf-page canvas {
+  display: block;
+  max-width: none !important;
+}
+.pdf-container {
+  touch-action: none !important;
+  -webkit-overflow-scrolling: auto;
+  overscroll-behavior: contain;
+}
