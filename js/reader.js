@@ -58,60 +58,75 @@
     }
   }
 
-  async function render() {
-    if (!R.pdf) return;
-    const token = ++R.renderToken;
-    R.rendering = true;
-    const container = $("pdfPages");
-    container.innerHTML = "";
-    container.style.transform = "";
-    const pages = R.mode === "single"
-      ? [R.page]
-      : Array.from({ length: R.pdf.numPages }, (_, i) => i + 1);
+  const pageNodes = new Map();
+  const renderedPages = new Map();
+  let pageObserver = null;
+  const visiblePageNumbers = new Set();
+  let renderQueue = Promise.resolve();
+  let pageRatio = 1.414;
+  const MAX_ACTIVE_CANVASES = 7;
 
-    $("pageInput").value = R.page;
-    $("zoomLabel").textContent = Math.round(R.scale * 100) + "%";
+  function pageFitScale(baseViewport) {
+    const maxWidth = Math.max(280, Math.min(window.innerWidth - 20, 900));
+    return Math.min(1, maxWidth / baseViewport.width);
+  }
 
-    for (const n of pages) {
-      if (token !== R.renderToken) return;
-      const page = await R.pdf.getPage(n);
-      if (token !== R.renderToken) return;
+  function clearRenderedPage(n) {
+    const wrap = pageNodes.get(n);
+    if (!wrap) return;
+    const canvas = wrap.querySelector("canvas");
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 0;
+      canvas.height = 0;
+      canvas.remove();
+    }
+    wrap.querySelector(".textLayer")?.remove();
+    wrap.querySelectorAll(".pdf-note-overlay").forEach(el => el.remove());
+    renderedPages.delete(n);
+  }
 
-      const rotation = (page.rotate + R.rotation) % 360;
-      const baseViewport = page.getViewport({ scale: 1, rotation });
-      const maxWidth = Math.max(280, Math.min(window.innerWidth - 20, 900));
-      const fitScale = Math.min(1, maxWidth / baseViewport.width);
-      const finalViewport = page.getViewport({ scale: R.scale * fitScale, rotation });
+  async function renderOnePage(n, token) {
+    if (!R.pdf || token !== R.renderToken || renderedPages.has(n)) return;
+    const wrap = pageNodes.get(n);
+    if (!wrap) return;
 
-      const wrap = document.createElement("div");
-      wrap.className = "pdf-page";
-      wrap.dataset.page = n;
-      wrap.style.width = finalViewport.width + "px";
-      wrap.style.height = finalViewport.height + "px";
+    const page = await R.pdf.getPage(n);
+    if (token !== R.renderToken || !wrap.isConnected) return;
 
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d", { alpha: false });
-      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-      canvas.width = Math.max(1, Math.floor(finalViewport.width * dpr));
-      canvas.height = Math.max(1, Math.floor(finalViewport.height * dpr));
-      canvas.style.width = finalViewport.width + "px";
-      canvas.style.height = finalViewport.height + "px";
+    const rotation = (page.rotate + R.rotation) % 360;
+    const baseViewport = page.getViewport({ scale: 1, rotation });
+    const fitScale = pageFitScale(baseViewport);
+    const viewport = page.getViewport({ scale: R.scale * fitScale, rotation });
 
-      wrap.append(canvas);
-      container.append(wrap);
+    wrap.style.width = viewport.width + "px";
+    wrap.style.height = viewport.height + "px";
+    wrap.dataset.rendering = "true";
 
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { alpha: false, desynchronized: true });
+    canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+    canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+    canvas.style.width = viewport.width + "px";
+    canvas.style.height = viewport.height + "px";
+    wrap.append(canvas);
+
+    try {
       await page.render({
-        canvasContext: ctx,
-        viewport: finalViewport,
+        canvasContext: context,
+        viewport,
         transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
       }).promise;
-
-      if (token !== R.renderToken) return;
+      if (token !== R.renderToken || !wrap.isConnected) {
+        canvas.width = 0; canvas.height = 0; return;
+      }
 
       const textLayer = document.createElement("div");
       textLayer.className = "textLayer";
-      textLayer.style.width = finalViewport.width + "px";
-      textLayer.style.height = finalViewport.height + "px";
+      textLayer.style.width = viewport.width + "px";
+      textLayer.style.height = viewport.height + "px";
       wrap.append(textLayer);
 
       try {
@@ -119,32 +134,127 @@
         await pdfjsLib.renderTextLayer({
           textContent,
           container: textLayer,
-          viewport: finalViewport,
+          viewport,
           textDivs: []
         }).promise;
-      } catch (textErr) {
-        console.warn("Text layer tidak tersedia", textErr);
+      } catch (textError) {
+        console.warn("Text layer tidak tersedia:", textError);
       }
 
-      const saved = await PDFDB.annotations(R.doc.id);
-      saved.filter(a => a.page === n && a.type === "note").forEach(a => {
+      const annotations = await PDFDB.annotations(R.doc.id);
+      annotations.filter(a => a.page === n && a.type === "note").forEach(a => {
         const note = document.createElement("div");
+        note.className = "pdf-note-overlay";
         note.textContent = a.text;
-        note.style.cssText = "position:absolute;left:8%;top:12%;max-width:80%;padding:4px;background:#ffeb3b;color:#111;font-size:12px;";
+        note.style.cssText = "position:absolute;left:8%;top:12%;max-width:80%;padding:4px;background:#ffeb3b;color:#111;font-size:12px;z-index:4;";
         wrap.append(note);
       });
-    }
 
+      wrap.dataset.rendering = "false";
+      renderedPages.set(n, Date.now());
+      trimRenderedPages(n);
+    } catch (error) {
+      canvas.remove();
+      wrap.dataset.rendering = "false";
+      console.error("Gagal merender halaman", n, error);
+    }
+  }
+
+  function trimRenderedPages(currentPage) {
+    if (renderedPages.size <= MAX_ACTIVE_CANVASES) return;
+    const candidates = [...renderedPages.keys()]
+      .filter(n => Math.abs(n - currentPage) > 2)
+      .sort((a, b) => Math.abs(b - currentPage) - Math.abs(a - currentPage));
+    while (renderedPages.size > MAX_ACTIVE_CANVASES && candidates.length) {
+      clearRenderedPage(candidates.shift());
+    }
+  }
+
+  function queueRender(n, token) {
+    renderQueue = renderQueue.then(() => renderOnePage(n, token)).catch(err => {
+      console.error("Antrean render:", err);
+    });
+    return renderQueue;
+  }
+
+  async function render() {
+    if (!R.pdf) return;
+    const token = ++R.renderToken;
+    R.rendering = true;
+    const container = $("pdfPages");
+    const scrollBox = $("pdfContainer");
+    const previousPage = R.page;
+
+    if (pageObserver) pageObserver.disconnect();
+    pageNodes.clear();
+    visiblePageNumbers.clear();
+    renderedPages.clear();
+    container.innerHTML = "";
+    container.style.transform = "";
+
+    $("pageInput").value = R.page;
+    $("zoomLabel").textContent = Math.round(R.scale * 100) + "%";
+
+    const pageCount = R.mode === "single" ? 1 : R.pdf.numPages;
+    const firstPageNumber = R.mode === "single" ? R.page : 1;
+    const firstPage = await R.pdf.getPage(firstPageNumber);
     if (token !== R.renderToken) return;
-    R.rendering = false;
+
+    const firstRotation = (firstPage.rotate + R.rotation) % 360;
+    const firstBase = firstPage.getViewport({ scale: 1, rotation: firstRotation });
+    pageRatio = firstBase.height / firstBase.width;
+    const fit = pageFitScale(firstBase);
+    const estimatedWidth = firstBase.width * fit * R.scale;
+    const estimatedHeight = firstBase.height * fit * R.scale;
+
+    for (let i = 0; i < pageCount; i++) {
+      const n = R.mode === "single" ? R.page : i + 1;
+      const holder = document.createElement("div");
+      holder.className = "pdf-page pdf-page-placeholder";
+      holder.dataset.page = n;
+      holder.style.width = estimatedWidth + "px";
+      holder.style.height = estimatedHeight + "px";
+      holder.style.maxWidth = "none";
+      pageNodes.set(n, holder);
+      container.append(holder);
+    }
 
     if (R.mode === "single") {
-      $("pdfContainer").scrollTop = 0;
-      $("pdfContainer").scrollLeft = 0;
+      scrollBox.scrollTop = 0;
+      scrollBox.scrollLeft = 0;
+      await queueRender(R.page, token);
     } else {
-      const target = container.querySelector('[data-page="' + R.page + '"]');
-      if (target) target.scrollIntoView({ block: "start" });
+      pageObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          const n = Number(entry.target.dataset.page);
+          if (entry.isIntersecting) {
+            visiblePageNumbers.add(n);
+            queueRender(n, token);
+          } else {
+            visiblePageNumbers.delete(n);
+            if (renderedPages.has(n) && Math.abs(n - R.page) > 3) {
+              clearRenderedPage(n);
+            }
+          }
+        });
+      }, {
+        root: scrollBox,
+        rootMargin: "1200px 0px 1200px 0px",
+        threshold: 0
+      });
+
+      pageNodes.forEach(node => pageObserver.observe(node));
+
+      const target = pageNodes.get(previousPage);
+      if (target) {
+        target.scrollIntoView({ block: "start" });
+        queueRender(previousPage, token);
+        if (pageNodes.has(previousPage - 1)) queueRender(previousPage - 1, token);
+        if (pageNodes.has(previousPage + 1)) queueRender(previousPage + 1, token);
+      }
     }
+
+    R.rendering = false;
     saveProgress();
   }
 
@@ -163,8 +273,14 @@
     if (R.mode === "single") {
       render();
     } else {
-      const el = $("pdfPages").querySelector('[data-page="' + R.page + '"]');
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      const el = pageNodes.get(R.page);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        const token = R.renderToken;
+        queueRender(R.page, token);
+        if (pageNodes.has(R.page - 1)) queueRender(R.page - 1, token);
+        if (pageNodes.has(R.page + 1)) queueRender(R.page + 1, token);
+      }
       $("pageInput").value = R.page;
       saveProgress();
     }
@@ -262,23 +378,32 @@
     window.showLibrary();
   };
 
+  let scrollFramePending = false;
   $("pdfContainer").addEventListener("scroll", () => {
-    if (R.mode !== "continuous" || !R.pdf) return;
-    const els = [...$("pdfPages").children];
-    const top = $("pdfContainer").getBoundingClientRect().top;
-    let best = R.page;
-    let dist = Infinity;
-    els.forEach(el => {
-      const d = Math.abs(el.getBoundingClientRect().top - top);
-      if (d < dist) { dist = d; best = Number(el.dataset.page); }
+    if (R.mode !== "continuous" || !R.pdf || scrollFramePending) return;
+    scrollFramePending = true;
+    requestAnimationFrame(() => {
+      scrollFramePending = false;
+      const boxTop = $("pdfContainer").getBoundingClientRect().top;
+      let best = R.page;
+      let bestDistance = Infinity;
+      visiblePageNumbers.forEach(n => {
+        const el = pageNodes.get(n);
+        if (!el) return;
+        const distance = Math.abs(el.getBoundingClientRect().top - boxTop);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = n;
+        }
+      });
+      if (best !== R.page) {
+        R.page = best;
+        $("pageInput").value = best;
+        clearTimeout(window._progressTimer);
+        window._progressTimer = setTimeout(saveProgress, 700);
+      }
     });
-    if (best !== R.page) {
-      R.page = best;
-      $("pageInput").value = best;
-      clearTimeout(window._progressTimer);
-      window._progressTimer = setTimeout(saveProgress, 500);
-    }
-  });
+  }, { passive: true });
 
   /*
    * Gestur sentuh:
